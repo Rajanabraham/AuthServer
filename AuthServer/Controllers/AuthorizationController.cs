@@ -76,8 +76,7 @@ namespace AuthServer.Controllers
             // Set claims using the user's ID as the subject
             identity.SetClaim(Claims.Subject, user.Id)
                 .SetClaim(Claims.Email,  user.Email)
-                .SetClaim(Claims.Name, user.UserName)
-                .SetClaims(Claims.Role, (await _userManager.GetRolesAsync(user)).ToImmutableArray());
+                .SetClaim(Claims.Name, user.UserName);
             identity.SetScopes(request.GetScopes());
             identity.SetResources(await _scopeManager.ListResourcesAsync(identity.GetScopes()).ToListAsync());
 
@@ -172,9 +171,7 @@ namespace AuthServer.Controllers
                     identity.SetClaim(Claims.Subject, await _userManager.GetUserIdAsync(user))
                            .SetClaim(Claims.Email, await _userManager.GetEmailAsync(user))
                            .SetClaim(Claims.Name, await _userManager.GetUserNameAsync(user))
-                           .SetClaim(Claims.PreferredUsername, await _userManager.GetUserNameAsync(user))
-                           .SetClaims(Claims.Role, (await _userManager.GetRolesAsync(user)).ToImmutableArray());
-
+                           .SetClaim(Claims.PreferredUsername, await _userManager.GetUserNameAsync(user));
                     identity.SetDestinations(AuthService.GetDestinations);
 
                     return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);

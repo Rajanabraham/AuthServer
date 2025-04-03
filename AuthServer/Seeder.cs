@@ -4,11 +4,11 @@ using OpenIddict.Abstractions;
 
 namespace AuthServer
 {
-    public class ClientSeeder
+    public class Seeder
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly IOpenIddictScopeManager _scopeManager;
-        public ClientSeeder(IServiceProvider serviceProvider, IOpenIddictScopeManager scopeManager)
+        public Seeder(IServiceProvider serviceProvider, IOpenIddictScopeManager scopeManager)
         {
             _serviceProvider = serviceProvider;
             _scopeManager = scopeManager;
@@ -51,9 +51,11 @@ namespace AuthServer
                 OpenIddictConstants.Permissions.Endpoints.Token,
                 OpenIddictConstants.Permissions.GrantTypes.AuthorizationCode,
                 OpenIddictConstants.Permissions.ResponseTypes.Code,
+                OpenIddictConstants.Permissions.GrantTypes.RefreshToken,
                 OpenIddictConstants.Permissions.Scopes.Email,
                 OpenIddictConstants.Permissions.Scopes.Profile,
                 OpenIddictConstants.Permissions.Scopes.Roles,
+                "scp:offline_access",
                 "scp:service1",
                 "scp:service2"
             }

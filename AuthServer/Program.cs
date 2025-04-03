@@ -40,31 +40,29 @@ builder.Services.AddOpenIddict()
     // Register the OpenIddict server components.
     .AddServer(options =>
     {
-        options.DisableAccessTokenEncryption();
+       // options.DisableAccessTokenEncryption();
         // Enable the token endpoint.
         options.SetAuthorizationEndpointUris("connect/authorize")
         .SetTokenEndpointUris("connect/token")
         ;
 
-        // Enable the client credentials flow.
-        options.AllowAuthorizationCodeFlow();
+        // Enable the Authorization credentials flow.
+        options.AllowAuthorizationCodeFlow().AllowRefreshTokenFlow();
 
         options.RegisterScopes(
           OpenIddictConstants.Scopes.OpenId,
           OpenIddictConstants.Scopes.Email,
-          OpenIddictConstants.Scopes.Profile
-          //OpenIddictConstants.Scopes.Roles
-
+          OpenIddictConstants.Scopes.Profile,
+          OpenIddictConstants.Scopes.OfflineAccess
       );
         // Register the signing and encryption credentials.
         //  options.AddDevelopmentEncryptionCertificate();
-        // options.AddDevelopmentSigningCertificate();
-        // options.AddEncryptionKey(new SymmetricSecurityKey(Encoding.UTF8.GetBytes("my-encryption-key-32-chars-long!")));
-        //  options.AddSigningKey(new SymmetricSecurityKey(Encoding.UTF8.GetBytes("my-secret-key-32-chars-long!!!!")));
+         options.AddDevelopmentSigningCertificate();
+        //options.AddEphemeralSigningKey(); // Temporary signing key
+        //options.AddEphemeralEncryptionKey(); // Temporary encryption key
+        options.AddEncryptionKey(new SymmetricSecurityKey(
+            Convert.FromBase64String("DRjd/GnduI3Efzen9V9BvbNUfc/VKgXltV7Kbk9sMkY=")));
 
-
-        options.AddEphemeralSigningKey(); // Temporary signing key
-        options.AddEphemeralEncryptionKey(); // Temporary encryption key
 
         // Register the ASP.NET Core host and configure the ASP.NET Core options.
         options.UseAspNetCore()
@@ -72,7 +70,7 @@ builder.Services.AddOpenIddict()
                .EnableTokenEndpointPassthrough();
     });
 builder.Services.AddTransient<AuthService>();
-builder.Services.AddTransient<ClientSeeder>();
+builder.Services.AddTransient<Seeder>();
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(
@@ -92,7 +90,7 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    var seeder = scope.ServiceProvider.GetRequiredService<ClientSeeder>();
+    var seeder = scope.ServiceProvider.GetRequiredService<Seeder>();
     seeder.AddClients().GetAwaiter().GetResult();
 }
 

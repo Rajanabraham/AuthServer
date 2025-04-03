@@ -1,0 +1,19 @@
+[
+  {
+    "Name": "New Profile",
+    "Projects": [
+      {
+        "Path": "AuthServer\\AuthServer.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "Service1\\Service1.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "Service2\\Service2.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]
