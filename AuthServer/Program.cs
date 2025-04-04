@@ -12,8 +12,12 @@ builder.Services.AddControllers();
 builder.Services.AddRazorPages();
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    // Configure Entity Framework Core to use Microsoft SQL Server.
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+    //// Configure Entity Framework Core to use Microsoft SQL Server.
+    //options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+
+    // Configure Entity Framework Core to use Postgre SQL Server.
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
+
 
     // Register the entity sets needed by OpenIddict.
     // Note: use the generic overload if you need to replace the default OpenIddict entities.
