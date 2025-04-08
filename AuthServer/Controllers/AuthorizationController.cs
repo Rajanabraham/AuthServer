@@ -10,6 +10,8 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using System.Web;
 using System.Collections.Immutable;
+using AuthServer.Const;
+using Microsoft.EntityFrameworkCore;
 
 namespace AuthServer.Controllers
 {
@@ -176,12 +178,77 @@ namespace AuthServer.Controllers
 
                     return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
                 }
-
-                return BadRequest(new AuthenticationProperties(new Dictionary<string, string>
+                else if(request.GrantType == ExtensionGrant.PasswordlessExtensionGrantName)
                 {
-                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.UnsupportedGrantType,
-                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The specified grant type is not supported."
-                }));
+                    // Get phone number from request
+                    var phoneNumber = request.GetParameter("phone_number")?.ToString();
+                    if (string.IsNullOrEmpty(phoneNumber))
+                    {
+                        return BadRequest(new Dictionary<string, string>
+                    {
+                    { OpenIddictServerAspNetCoreConstants.Properties.Error, OpenIddictConstants.Errors.InvalidGrant }
+                    });
+                    }
+
+                    var normalizedPhoneNumber = phoneNumber.Trim();
+                    var user = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == normalizedPhoneNumber);
+                    if (user == null)
+                    {
+                        return Forbid(new AuthenticationProperties(new Dictionary<string, string>
+                        {
+                                { OpenIddictServerAspNetCoreConstants.Properties.Error, OpenIddictConstants.Errors.InvalidGrant }
+                         }));
+                    }
+
+                    // Create a ClaimsPrincipal for the authenticated user
+                    var principal = await _signInManager.CreateUserPrincipalAsync(user);
+
+                    // Get Roles for user and add claim
+                    var roles = await _userManager.GetRolesAsync(user);
+                    principal.AddClaim("role", string.Join(",", roles));
+
+                    // Set scopes for the principal
+                    principal.SetScopes(request.GetScopes());
+
+                    // Set resources (this will depend on your scope configuration)
+                    principal.SetResources(await _scopeManager.ListResourcesAsync(request.GetScopes()).ToListAsync());
+
+                    if (!await _signInManager.CanSignInAsync(user))
+                    {
+                        return Forbid(
+                            authenticationSchemes: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
+                            properties: new AuthenticationProperties(new Dictionary<string, string>
+                            {
+                                [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                                [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The user is no longer allowed to sign in."
+                            }));
+                    }
+
+                    // Create a new ClaimsIdentity with updated claims
+                    var identity = new ClaimsIdentity(
+                        principal.Claims,
+                        authenticationType: TokenValidationParameters.DefaultAuthenticationType,
+                        nameType: Claims.Name,
+                        roleType: Claims.Role);
+
+                    // Set the updated claims
+                    identity.SetClaim(Claims.Subject, await _userManager.GetUserIdAsync(user))
+                           .SetClaim(Claims.Email, await _userManager.GetEmailAsync(user))
+                           .SetClaim(Claims.Name, await _userManager.GetUserNameAsync(user))
+                           .SetClaim(Claims.PreferredUsername, await _userManager.GetUserNameAsync(user));
+                    identity.SetDestinations(AuthService.GetDestinations);
+
+                    return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+
+                    // Return the token
+                    return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+
+                }
+                return BadRequest(new AuthenticationProperties(new Dictionary<string, string>
+                    {
+                        [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.UnsupportedGrantType,
+                        [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The specified grant type is not supported."
+                    }));
             }
             catch (Exception ex)
             {

@@ -8,10 +8,10 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace AuthServer.Data.Migrations
+namespace Identity.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20250404101805_initial")]
+    [Migration("20250407062134_initial")]
     partial class initial
     {
         /// <inheritdoc />
