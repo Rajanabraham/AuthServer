@@ -1,8 +1,9 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using OpenIddict.Abstractions;
 
-namespace AuthServer
+namespace Identity
 {
     public class Seeder
     {
@@ -59,6 +60,30 @@ namespace AuthServer
                 "scp:service1",
                 "scp:service2"
             }
+            });
+
+           
+            var mobileclient = await manager.FindByClientIdAsync("mobile-client");
+
+            if (mobileclient != null)
+            {
+                await manager.DeleteAsync(mobileclient);
+            }
+            await manager.CreateAsync(new OpenIddictApplicationDescriptor
+            {
+                ClientId = "mobile-client",
+                ClientType = OpenIddictConstants.ClientTypes.Public,
+                Permissions =
+                {
+                    OpenIddictConstants.Permissions.Endpoints.Token,
+                    OpenIddictConstants.Permissions.Scopes.Email,
+                    OpenIddictConstants.Permissions.Scopes.Profile,
+                    OpenIddictConstants.Permissions.GrantTypes.RefreshToken,
+                    "gt:"+"passwordless",
+                    "scp:offline_access",
+                    "scp:service1",
+                    "scp:service2"
+                }
             });
 
             // Check if the "service1" scope already exists
