@@ -1,17 +1,15 @@
-﻿using Microsoft.AspNetCore.Authentication;
+﻿using System.Security.Claims;
+using AuthServer.Const;
 using Microsoft.AspNetCore;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
 using static OpenIddict.Abstractions.OpenIddictConstants;
-using System.Security.Claims;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using System.Web;
-using System.Collections.Immutable;
-using AuthServer.Const;
-using Microsoft.EntityFrameworkCore;
 
 namespace AuthServer.Controllers
 {
@@ -51,7 +49,7 @@ namespace AuthServer.Controllers
             var result = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             var isAuthenticated = _authService.IsAuthenticated(result, request);
             var parameters = _authService.ParseOAuthParameters(HttpContext);
-            if (!isAuthenticated) // Challenge if not authenticated
+            if (!isAuthenticated)
             {
                 return Challenge(
                     authenticationSchemes: CookieAuthenticationDefaults.AuthenticationScheme,
@@ -61,23 +59,19 @@ namespace AuthServer.Controllers
                     });
             }
 
-            // Retrieve the profile of the logged-in user from Identity tables
             var user = await _userManager.GetUserAsync(result.Principal) ??
                 throw new InvalidOperationException("The user details cannot be retrieved.");
 
-            // Retrieve the application details from the database
             var application = await _applicationManager.FindByClientIdAsync(request.ClientId) ??
                 throw new InvalidOperationException("Details concerning the calling client application cannot be found.");
-
 
             var identity = new ClaimsIdentity(
                 authenticationType: TokenValidationParameters.DefaultAuthenticationType,
                 nameType: Claims.Name,
                 roleType: Claims.Role);
 
-            // Set claims using the user's ID as the subject
             identity.SetClaim(Claims.Subject, user.Id)
-                .SetClaim(Claims.Email,  user.Email)
+                .SetClaim(Claims.Email, user.Email)
                 .SetClaim(Claims.Name, user.UserName);
             identity.SetScopes(request.GetScopes());
             identity.SetResources(await _scopeManager.ListResourcesAsync(identity.GetScopes()).ToListAsync());
@@ -113,152 +107,25 @@ namespace AuthServer.Controllers
             {
                 if (request.IsAuthorizationCodeGrantType() || request.IsRefreshTokenGrantType())
                 {
-                    // Authenticate the request
-                    var result = await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
-                    if (result?.Principal == null)
-                    {
-                        return Forbid(
-                            authenticationSchemes: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
-                            properties: new AuthenticationProperties(new Dictionary<string, string>
-                            {
-                                [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
-                                [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "Invalid token."
-                            }));
-                    }
-
-                    // Validate the subject claim
-                    var subject = result.Principal.GetClaim(Claims.Subject);
-                    if (string.IsNullOrEmpty(subject))
-                    {
-                        return Forbid(
-                            authenticationSchemes: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
-                            properties: new AuthenticationProperties(new Dictionary<string, string>
-                            {
-                                [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
-                                [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "Invalid token subject."
-                            }));
-                    }
-
-                    var user = await _userManager.FindByIdAsync(subject);
-                    if (user == null)
-                    {
-                        return Forbid(
-                            authenticationSchemes: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
-                            properties: new AuthenticationProperties(new Dictionary<string, string>
-                            {
-                                [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
-                                [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The token is no longer valid."
-                            }));
-                    }
-
-                    if (!await _signInManager.CanSignInAsync(user))
-                    {
-                        return Forbid(
-                            authenticationSchemes: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
-                            properties: new AuthenticationProperties(new Dictionary<string, string>
-                            {
-                                [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
-                                [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The user is no longer allowed to sign in."
-                            }));
-                    }
-
-                    // Create a new ClaimsIdentity with updated claims
-                    var identity = new ClaimsIdentity(
-                        result.Principal.Claims,
-                        authenticationType: TokenValidationParameters.DefaultAuthenticationType,
-                        nameType: Claims.Name,
-                        roleType: Claims.Role);
-
-                    // Set the updated claims
-                    identity.SetClaim(Claims.Subject, await _userManager.GetUserIdAsync(user))
-                           .SetClaim(Claims.Email, await _userManager.GetEmailAsync(user))
-                           .SetClaim(Claims.Name, await _userManager.GetUserNameAsync(user))
-                           .SetClaim(Claims.PreferredUsername, await _userManager.GetUserNameAsync(user));
-                    identity.SetDestinations(AuthService.GetDestinations);
-
-                    return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+                    return await HandleCodeOrRefreshTokenGrant(request);
                 }
-                else if(request.GrantType == ExtensionGrant.PasswordlessExtensionGrantName)
+
+                if (request.GrantType == ExtensionGrant.PasswordlessExtensionGrantName)
                 {
-                    // Get phone number from request
-                    var phoneNumber = request.GetParameter("phone_number")?.ToString();
-                    if (string.IsNullOrEmpty(phoneNumber))
-                    {
-                        return BadRequest(new Dictionary<string, string>
-                    {
-                    { OpenIddictServerAspNetCoreConstants.Properties.Error, OpenIddictConstants.Errors.InvalidGrant }
-                    });
-                    }
-
-                    var normalizedPhoneNumber = phoneNumber.Trim();
-                    var user = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == normalizedPhoneNumber);
-                    if (user == null)
-                    {
-                        return Forbid(new AuthenticationProperties(new Dictionary<string, string>
-                        {
-                                { OpenIddictServerAspNetCoreConstants.Properties.Error, OpenIddictConstants.Errors.InvalidGrant }
-                         }));
-                    }
-
-                    // Create a ClaimsPrincipal for the authenticated user
-                    var principal = await _signInManager.CreateUserPrincipalAsync(user);
-
-                    // Get Roles for user and add claim
-                    var roles = await _userManager.GetRolesAsync(user);
-                    principal.AddClaim("role", string.Join(",", roles));
-
-                    // Set scopes for the principal
-                    principal.SetScopes(request.GetScopes());
-
-                    // Set resources (this will depend on your scope configuration)
-                    principal.SetResources(await _scopeManager.ListResourcesAsync(request.GetScopes()).ToListAsync());
-
-                    if (!await _signInManager.CanSignInAsync(user))
-                    {
-                        return Forbid(
-                            authenticationSchemes: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
-                            properties: new AuthenticationProperties(new Dictionary<string, string>
-                            {
-                                [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
-                                [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The user is no longer allowed to sign in."
-                            }));
-                    }
-
-                    // Create a new ClaimsIdentity with updated claims
-                    var identity = new ClaimsIdentity(
-                        principal.Claims,
-                        authenticationType: TokenValidationParameters.DefaultAuthenticationType,
-                        nameType: Claims.Name,
-                        roleType: Claims.Role);
-
-                    // Set the updated claims
-                    identity.SetClaim(Claims.Subject, await _userManager.GetUserIdAsync(user))
-                           .SetClaim(Claims.Email, await _userManager.GetEmailAsync(user))
-                           .SetClaim(Claims.Name, await _userManager.GetUserNameAsync(user))
-                           .SetClaim(Claims.PreferredUsername, await _userManager.GetUserNameAsync(user));
-                    identity.SetDestinations(AuthService.GetDestinations);
-
-                    return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
-
-                    // Return the token
-                    return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
-
+                    return await HandlePasswordlessGrant(request);
                 }
+
                 return BadRequest(new AuthenticationProperties(new Dictionary<string, string>
-                    {
-                        [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.UnsupportedGrantType,
-                        [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The specified grant type is not supported."
-                    }));
+                {
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.UnsupportedGrantType,
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The specified grant type is not supported."
+                }));
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                return Forbid(
-                    authenticationSchemes: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
-                    properties: new AuthenticationProperties(new Dictionary<string, string>
-                    {
-                        [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
-                        [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "An error occurred while processing the token."
-                    }));
+                return CreateForbidResult(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
+                    Errors.InvalidGrant,
+                    "An error occurred while processing the token.");
             }
         }
 
@@ -266,13 +133,106 @@ namespace AuthServer.Controllers
         public async Task<IActionResult> LogoutPost()
         {
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-
             return SignOut(
                 authenticationSchemes: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
-                properties: new AuthenticationProperties
+                properties: new AuthenticationProperties { RedirectUri = "/" });
+        }
+
+        private async Task<IActionResult> HandleCodeOrRefreshTokenGrant(OpenIddictRequest request)
+        {
+            var result = await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            if (result?.Principal == null)
+                return InvalidToken();
+
+            var subject = result.Principal.GetClaim(Claims.Subject);
+            if (string.IsNullOrEmpty(subject))
+                return InvalidTokenSubject();
+
+            var user = await _userManager.FindByIdAsync(subject);
+            if (user == null)
+                return TokenNoLongerValid();
+
+            if (!await _signInManager.CanSignInAsync(user))
+                return UserCannotSignIn();
+
+            var identity = CreateIdentity(result.Principal.Claims, user);
+            return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        }
+
+        private async Task<IActionResult> HandlePasswordlessGrant(OpenIddictRequest request)
+        {
+            var phoneNumber = request.GetParameter("phone_number")?.ToString()?.Trim();
+            if (string.IsNullOrEmpty(phoneNumber))
+                return BadRequest(new Dictionary<string, string>
                 {
-                    RedirectUri = "/"
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant
                 });
+
+            var user = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
+            if (user == null)
+                return InvalidGrant();
+
+            if (!await _signInManager.CanSignInAsync(user))
+                return UserCannotSignIn();
+
+            var principal = await _signInManager.CreateUserPrincipalAsync(user);
+            var roles = await _userManager.GetRolesAsync(user);
+
+            var identity = CreateIdentity(principal.Claims, user);
+            identity.AddClaim(new Claim("role", string.Join(",", roles)));
+            identity.SetScopes(request.GetScopes());
+            identity.SetResources(await _scopeManager.ListResourcesAsync(request.GetScopes()).ToListAsync());
+
+            return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        }
+
+        private ClaimsIdentity CreateIdentity(IEnumerable<Claim> existingClaims, IdentityUser user)
+        {
+            var identity = new ClaimsIdentity(
+                existingClaims,
+                TokenValidationParameters.DefaultAuthenticationType,
+                Claims.Name,
+                Claims.Role);
+
+            identity.SetClaim(Claims.Subject, user.Id)
+                    .SetClaim(Claims.Email, user.Email)
+                    .SetClaim(Claims.Name, user.UserName)
+                    .SetClaim(Claims.PreferredUsername, user.UserName)
+                    .SetDestinations(AuthService.GetDestinations);
+
+            return identity;
+        }
+
+        // Helper methods for common error responses
+        private IActionResult InvalidToken() =>
+            CreateForbidResult(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
+                Errors.InvalidGrant, "Invalid token.");
+
+        private IActionResult InvalidTokenSubject() =>
+            CreateForbidResult(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
+                Errors.InvalidGrant, "Invalid token subject.");
+
+        private IActionResult TokenNoLongerValid() =>
+            CreateForbidResult(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
+                Errors.InvalidGrant, "The token is no longer valid.");
+
+        private IActionResult UserCannotSignIn() =>
+            CreateForbidResult(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
+                Errors.InvalidGrant, "The user is no longer allowed to sign in.");
+
+        private IActionResult InvalidGrant() =>
+            CreateForbidResult(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
+                Errors.InvalidGrant);
+
+        private IActionResult CreateForbidResult(string authenticationScheme, string error, string description = null)
+        {
+            var properties = new AuthenticationProperties();
+            properties.SetParameter(OpenIddictServerAspNetCoreConstants.Properties.Error, error);
+
+            if (!string.IsNullOrEmpty(description))
+                properties.SetParameter(OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription, description);
+
+            return Forbid(properties, authenticationScheme);
         }
     }
 }
