@@ -46,7 +46,7 @@ namespace Identity.Controllers
                 string email = "test" + "@testmail.com";
                 IdentityUser identityuser = new IdentityUser
                 {
-                    Id = "0",  
+                    Id = "12345",  
                     UserName = normalizedPhoneNumber,
                     Email = email,
                     PhoneNumber = normalizedPhoneNumber, 

@@ -13,6 +13,14 @@
       {
         "Path": "Service2\\Service2.csproj",
         "Action": "Start"
+      },
+      {
+        "Path": "Identity\\Identity.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "ApiGateway\\ApiGateway.csproj",
+        "Action": "Start"
       }
     ]
   }

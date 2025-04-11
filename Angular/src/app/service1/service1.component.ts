@@ -17,7 +17,7 @@ export class Service1Component implements OnInit {
     const token = this.oauthService.getAccessToken();
     
     const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
-    this.http.get('https://localhost:44373/api/service1', { headers: headers, responseType: 'text' })
+    this.http.get('https://localhost:44309/gateway/service1', { headers: headers, responseType: 'text' })
       .subscribe(
         (res) => this.message = res,
         (err) => console.error(err)

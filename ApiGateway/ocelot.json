@@ -1,0 +1,51 @@
+{
+  "GlobalConfiguration": {
+    "BaseUrl": "https://localhost:44309"
+  },
+  "Routes": [
+    {
+      "UpstreamPathTemplate": "/gateway/Service1",
+      "UpstreamHttpMethod": [ "Get" ],
+      "DownstreamPathTemplate": "/api/Service1",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 44373
+        }
+      ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "OpenIddict.Validation.AspNetCore",
+        "AllowedScopes": [ "openid", "email", "offline_access", "service1" ]
+      },
+      "RouteClaimsRequirement": {
+        "sub": "12345" 
+      },
+      "RateLimitOptions": {
+        "EnableRateLimiting": true,
+        "Period": "10s",
+        "Limit": 3,
+        "PeriodTimespan": 10
+      },
+      "FileCacheOptions": {
+        "TtlSeconds": 10
+      }
+    },
+    {
+      "UpstreamPathTemplate": "/gateway/Service2",
+      "UpstreamHttpMethod": [ "Get" ],
+      "DownstreamPathTemplate": "/api/Service2",
+      "DownstreamScheme": "https",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 44347
+        }
+      ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "OpenIddict.Validation.AspNetCore",
+        "AllowedScopes": [ "openid", "email", "offline_access", "service2" ]
+      }
+    }
+  ]
+}
