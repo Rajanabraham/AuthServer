@@ -7,19 +7,19 @@
         "Action": "Start"
       },
       {
-        "Path": "Service1\\Service1.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "Service2\\Service2.csproj",
-        "Action": "Start"
-      },
-      {
-        "Path": "Identity\\Identity.csproj",
-        "Action": "Start"
-      },
-      {
         "Path": "ApiGateway\\ApiGateway.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "Services\\Identity\\Identity.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "Services\\Service1\\Service1.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "Services\\Service2\\Service2.csproj",
         "Action": "Start"
       }
     ]

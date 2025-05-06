@@ -13,4 +13,8 @@
     <PackageReference Include="OpenIddict.Validation.SystemNetHttp" Version="6.1.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\Common\Common.csproj" />
+  </ItemGroup>
+
 </Project>
